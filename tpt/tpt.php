@@ -251,13 +251,20 @@ class Expectation {
      * @return {String} Returns human-readable representation of this value
      */
     protected function displayValue($val) {
+        if (is_object($val)) {
+            if (isset($val->__act_as)) {
+                $name = $val->__act_as;
+            } else {
+                $name = get_class($name);
+            }
+        }
         if (is_array($val))     return "Array[".sizeOf($val)."]";
         if ($val === false)     return "false";
         if ($val === true)      return "true";
         if ($val === null)      return "null";
         if (is_string($val))    return "\"{$val}\"";
         if (is_numeric($val))   return $val;
-        if (is_object($val))    return "instance of ".get_class($val);
+        if (is_object($val))    return "instance of ".$name;
         return "unknown";
     }
 
@@ -330,7 +337,99 @@ class Expectation {
     }
 
     public function _toBeInstanceOf($val) {
-        return get_class($this->subject) == $val;
+        return $this->subject instanceof $val;
+    }
+
+    public function _toHaveCalled($method, $times) {
+        $class = get_class($this->subject);
+        $calls = $class::$__calls[$method];
+        return $times == count($calls);
+    }
+
+    public function _toHaveCalledWith($method, $args, $time=0) {
+        $class = get_class($this->subject);
+        $calls = $class::$__calls[$method];
+        return $calls[$time] == $args;
+    }
+}
+
+/**
+ * Generate mock classes that can be stubbed and asserted.
+ */
+class TPTMock {
+
+    /**
+     * Used to handle tracking calls to a mock object
+     * 
+     * @param mixed $instance The object instance being called against
+     * @param string $method The method we are recording a call for
+     * @param array $args  The arguments that are being called with
+     * @static
+     * @return mixed
+     */
+    public static function call($instance, $method, $args) {
+        $class = get_class($instance);
+        if (isset($class::$__stubs[$method])) {
+            if (empty($class::$__calls[$method])) {
+                $class::$__calls[$method] = array();
+            }
+            $class::$__calls[$method][] = $args;
+            return $class::$__stubs[$method];
+        }
+    }
+
+    /**
+     * Returns an instance of a newly mocked class
+     * 
+     * @param string $class  Name of class to mock
+     * @param array $methods_to_stub Array of methods to stub, with their return values
+     * @param array $args Arguments to pass to the constructor
+     * @static
+     * @access public
+     * @return mixed
+     */
+    public static function get($class, $methods_to_stub=array(), $args=array()) {
+        $klass = self::getReflection($class, $methods_to_stub);
+        return $klass->newInstanceArgs($args);
+    }
+
+    /**
+     * Returns a ReflectionClass object about the newly mocked class
+     *
+     * @param string $class  Name of class to mock
+     * @param array $methods_to_stub Array of methods to stub, with their return values
+     * @static
+     * @access public
+     * @return ReflectionClass
+     */
+    public static function getReflection($class, $methods_to_stub=array()) {
+        $class_name = "__".$class."_".rand();
+        $methods = array();
+        foreach ($methods_to_stub as $method => $args) {
+            $methods[] = <<<EOF
+    public function $method() {
+        return TPTMock::call(\$this, '$method', func_get_args());
+    }
+
+EOF;
+        }
+        $methods = implode("\n\n", $methods);
+        $def = <<<EOF
+class $class_name extends $class {
+    public \$__act_as = '$class';
+    public static \$__stubs = array();
+    public static \$__calls = array();
+
+    $methods
+
+}
+EOF;
+
+        // Ugly! 
+        eval($def);
+        $class_name::$__stubs = $methods_to_stub;
+        $klass = new ReflectionClass($class_name);
+        return $klass;
     }
 }
 

@@ -90,7 +90,49 @@ class WhenMakingAssertions extends TPTest {
 
 }
 
+class SomeClass {
+
+    public function __construct($a, $b) {
+        $this->sum = $a + $b;
+        $this->product = $a * $b;
+    }
+
+    public function division($number) {
+        return $number * $this->mockMe($this->sum, $number);
+    }
+
+    public function mockMe() {
+        die();
+    }
+}
+
+class WhenMocking extends TPTest {
+    public function beforeEach() {
+        $this->mock = TPTMock::get('SomeClass',
+            array('mockMe' => 10), // Mocks
+            array(4, 4)  // Constructor args
+        );
+    }
+
+    public function itShouldBeCorrectType() {
+        $this->expect($this->mock)->toBeInstanceOf('SomeClass');
+    }
+
+    public function itShouldHaveCorrectProduct() {
+        $this->expect($this->mock->sum)->toEqual(8);
+        $this->expect($this->mock->product)->toEqual(16);
+    }
+
+    public function itShouldNotCallMocks() {
+        $result = $this->mock->division(20);
+        $this->expect($this->mock)->toHaveCalled('mockMe', 1);
+        $this->expect($this->mock)->toHaveCalledWith('mockMe', array(8, 20));
+        $this->expect($result)->toEqual(200);
+    }
+}
+
 
 new WhenUsingCallbacks(array('verbose' => true));
 new WhenMakingAssertions(array('verbose' => true));
+new WhenMocking(array('verbose' => true));
 ?>
