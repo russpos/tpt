@@ -55,6 +55,32 @@ Tests are then executed as soon as an instance of this class is created:
 
     new WhenMakingAssertions();
 
+You can also create mock classes and then make assertions about them
+
+    class WhenMocking extends TPTest {
+        public function beforeEach() {
+            $this->mock = TPTMock::get('SomeClass',
+                array('mockMe' => 10), // Methods to mock
+                array(4, 4) // Constructor args
+            );
+        }
+
+        public function itShouldBeCorrectType() {
+            $this->expect($this->mock)->toBeInstanceOf('SomeClass');
+        }
+
+        public function itShouldHaveCorrectProduct() {
+            $this->expect($this->mock->sum)->toEqual(8);
+            $this->expect($this->mock->product)->toEqual(16);
+        }
+
+        public function itShouldNotCallMocks() {
+            $result = $this->mock->division(20);
+            $this->expect($this->mock)->toHaveCalled('mockMe', 1);
+            $this->expect($this->mock)->toHaveCalledWith('mockMe', array(8, 20));
+            $this->expect($result)->toEqual(200);
+        }
+    }
 
 ## Callbacks ##
 
